@@ -1,7 +1,9 @@
 % PET reconstruct from list detector responses using Fourier rebin(FORE).
-% Written by Shiwei Zhou 06/20/2020
-% Reference: Basics of PET Imaging Physics, Chemistry, and Regulations Second Edition
-%            Page 43-46, 71-73
+% Written by Shiwei Zhou, Youfang Lai 07/06/2020
+% Reference: 1. Basics of PET Imaging Physics, Chemistry, and Regulations Second Edition
+%               Page 43-46, 71-73
+%            2. Defrise, Michel, et al. "Exact and approximate rebinning algorithms for 3-D PET data."
+%               IEEE transactions on medical imaging 16.2 (1997): 145-158.
 % Reference function: https://www.mathworks.com/help/images/ref/iradon.html
 
 % Open bainary files, which have three columns, representing x, y and z
@@ -101,6 +103,7 @@ omegaLim = 2 * (omegaRange(2) - omegaRange(1));
 % zShiftUpMatrix = ceil((zShiftMatrix - zDirectionMin) / zDirectionDifference ) + 1;
 % zShiftDownMatrix = floor((zShiftMatrix - zDirectionMin) / zDirectionDifference ) + 1;
 sinogramFFTImagesFinal = zeros(length(rRange), length(phiRange), length(zDirectionRange));
+tic
 for i1 = 1 : size(sinogramImages , 3)  % sweep all z
     for i2 = 1 : size(sinogramImages , 4) % sweep all delta
         if ( sum(abs(sinogramImages(: , : , i1 , i2)),'all') ==0)       % for fast calc, skip this one
@@ -133,6 +136,8 @@ for i1 = 1 : size(sinogramImages , 3)  % sweep all z
         end
     end
 end
+toc
+save('rebin_result.mat','sinogramFFTImagesFinal');
 clear i1 i2 i3 i4 sinogramImages;
 
 % Norm
@@ -148,7 +153,7 @@ for i1 = 1 : size(sinogramFFTImagesFinal , 3)  % sweep all z
                 else
                     sinogramFFTImagesFinal(i3 , i4 ,i1 ) = sinogramFFTImagesFinal(i3 , i4 ,i1 ) / delta1;
                 end
-            elseif ( abs(deltaRange(i2))<= deltaLim && abs(kRange(i4)) <= kLim  && abs(omegaRange(i3)) <=omegaLim )
+            elseif (abs(kRange(i4)) <= kLim  && abs(omegaRange(i3)) <=omegaLim )
                 delta2 = min([ (lSize/2 - abs(zDirectionRange(i1)))/rSize , deltaLim]);
                 if (delta2 ==0)
                     sinogramFFTImagesFinal(i3 , i4 ,i1 ) = 0;
@@ -172,8 +177,8 @@ end
 phiRange = gpuArray(phiRange);
 for i =1: zDirectionNumber 
     sinogramImage = gpuArray(abs(sinogramRebinImages(: , : , i )));  
-    reconImage(:,:,i) = iradon(sinogramImage,phiRange,'none');
-    reconImage(:,:,i) = imgaussfilt(reconImage(:,:,i),2);
+    sinogramImage = iradon(sinogramImage,phiRange,'none');
+    reconImage(:,:,i) = gather(imgaussfilt(sinogramImage,2));
 end
 
 % plot(abs(squeeze(sum(sum(reconImage,2),1))));
