@@ -5,24 +5,24 @@
 % Reference function: https://www.mathworks.com/help/images/ref/iradon.html
 
 % Open bainary files, which have three columns, representing x, y and z
-fid=fopen('coin65.dat','rb');
-detectorPositions=fread(fid,'float32');
+fid=fopen('coin5.dat','rb');
+detectorPositions=fread(fid,'float64');
 fclose(fid);
-detectorPositions=reshape(detectorPositions,[],3);
+detectorPositions=reshape(detectorPositions,[],6);
 % figure(1);
 % clf;
 % scatter(f1(:,1),f1(:,2));
 
 % Change the dector positions to Line of Response.
 n = 1;
-detectorLines = zeros( size(detectorPositions,1) /2 , 4);
-for idx = 1 : 2 : size(detectorPositions,1)
+detectorLines = zeros( size(detectorPositions,1) , 4);
+for idx = 1  : size(detectorPositions,1)
     x1 = detectorPositions(idx , 1);
-    x2 = detectorPositions(idx + 1 , 1);
+    x2 = detectorPositions(idx , 4);
     y1 = detectorPositions(idx , 2);
-    y2 = detectorPositions(idx + 1 , 2);
+    y2 = detectorPositions(idx , 5);
     z1 = detectorPositions(idx , 3);
-    z2 = detectorPositions(idx + 1 , 3);
+    z2 = detectorPositions(idx , 6);
     if (x1 == x2)
         r = x1;
         phi = -90;
@@ -43,31 +43,32 @@ clear n idx x1 x2 y1 y2 z1 z2 k phi r;
 % histogram(detectorLines(:,3),10000);
 
 % Construct the sinogram
-rMin = -8;
-rMax = 8;
+rMin = -80.5;
+rMax = 80.5;
 rSize = rMax - rMin;
-rNumber = 2^10;
+rNumber = 2^11;
+rNumber = 2334;
 rRange = linspace(rMin , rMax ,rNumber);
-omegaRange = 2 * pi * (rRange(2) - rRange(1)) * (-rNumber/2 : rNumber/2 -1) /rNumber;
+omegaRange = 2 * pi * 1 / (rRange(2) - rRange(1)) * (-rNumber/2 : rNumber/2 -1) /rNumber;
 
 phiNumber = 256;
-phiRange = linspace(0,180 - 1 / phiNumber , phiNumber);
-kRange = 2 * pi * (phiRange(2) - phiRange(1)) * (-phiNumber/2 : phiNumber/2 -1) /phiNumber;
+phiRange = linspace(0,180, phiNumber);
+kRange = 2 * pi * 1 / (phiRange(2) - phiRange(1)) * (-phiNumber/2 : phiNumber/2 -1) /phiNumber;
 
 % zDirectionCluster = unique(detectorLines(:,3));
 % zDirectionMin = min(zDirectionCluster);
 % zDirectionMax = max(zDirectionCluster);
 % zDirectionNumber = length(zDirectionCluster);
-zDirectionMin = -5;
-zDirectionMax = 5;
-zDirectionNumber = 51;
+zDirectionMin = -24;
+zDirectionMax = 24;
+zDirectionNumber = 61;
 lSize = zDirectionMax - zDirectionMin;
 zDirectionRange = linspace(zDirectionMin , zDirectionMax ,zDirectionNumber);
 zDirectionDifference = zDirectionRange(2) - zDirectionRange(1);
 
 deltaMax = min([max(detectorLines(:,4)), max(-detectorLines(:,4)) ]);
 deltaMin = -deltaMax;
-deltaNumber = 101;
+deltaNumber = 81;
 deltaRange = linspace(deltaMin , deltaMax ,deltaNumber);
 
 sinogramImages = zeros(length(rRange), length(phiRange), length(zDirectionRange), length(deltaRange));
@@ -79,18 +80,18 @@ for idx = 1 : size(detectorLines,1)
     if ( r > rMax || r < rMin || z > zDirectionMax || z < zDirectionMin || delta > deltaMax || delta < deltaMin)
         continue;
     end
-    rPosition = floor((r - rMin) / (rMax - rMin) * rNumber) +1;
-    phiPosition = floor((phi)/180*phiNumber)+ 1;
-    zPosition = floor((z - zDirectionMin) / (zDirectionMax - zDirectionMin) * zDirectionNumber) +1;
-    deltaPosition = floor((delta - deltaMin) / (deltaMax - deltaMin) * deltaNumber) +1;
+    rPosition = floor((r - rMin) / (rRange(2) - rRange(1))) +1;
+    phiPosition = floor(phi/(phiRange(2)-phiRange(1)))+ 1;
+    zPosition = floor((z - zDirectionMin) / zDirectionDifference) +1;
+    deltaPosition = floor((delta - deltaMin) / (deltaRange(2)-deltaRange(1))) +1;
     sinogramImages(rPosition , phiPosition , zPosition , deltaPosition) = sinogramImages(rPosition , phiPosition , zPosition , deltaPosition) + 1;
 end
 clear idx r phi z delta rPosition phiPosition zPosition deltaPosition;
 
 % Fourier rebin
-deltaLim = 1;
+deltaLim = 0.05;
 kLim = 2;
-rOmega = 2;
+rOmega = 20;
 omegaLim = 2 * (omegaRange(2) - omegaRange(1));
 % sinogramFFTImages = fft2(sinogramImages);
 % sinogramFFTImages = fftshift(sinogramFFTImages , 1);
@@ -108,15 +109,19 @@ for i1 = 1 : size(sinogramImages , 3)  % sweep all z
         sinogramFFTImage = fftshift(fft2(sinogramImages(: , : , i1 , i2)));
         for i3 = 1 : size(sinogramImages , 1 )   % sweep all omega
             for i4 = 1 : size(sinogramImages , 2 )   % sweep all k
-                if(abs(kRange(i4) / omegaRange(i3))<rOmega && abs(kRange(i4))>kLim  )
-                    zShift = zDirectionRange(i1) - deltaRange(i2) * kRange(i4) / omegaRange(i3);
-                    zShiftUpIndex = ceil((zShift - zDirectionMin) / zDirectionDifference ) + 1;
-                    zShiftDownIndex = floor((zShift - zDirectionMin) / zDirectionDifference ) + 1;
-                    sinogramFFTImagesFinal(i3 , i4 , zShiftDownIndex) = sinogramFFTImagesFinal(i3 , i4 , zShiftDownIndex) ...
-                                                                    + (zShift - zDirectionRange(zShiftDownIndex)) * sinogramFFTImage(i3 , i4);
-                    sinogramFFTImagesFinal(i3 , i4 , zShiftUpIndex) = sinogramFFTImagesFinal(i3 , i4 , zShiftUpIndex) ...
-                                                                    + (zDirectionRange(zShiftUpIndex) - zShift) * sinogramFFTImage(i3 , i4);
-                end                
+                if(abs(kRange(i4) / omegaRange(i3))<rOmega && (abs(kRange(i4))>kLim ||  abs(omegaRange(i3)) >omegaLim) )
+                    zShift = zDirectionRange(i1)+zDirectionDifference/2 - deltaRange(i2) * kRange(i4) / omegaRange(i3);
+                    zShiftUpIndex = floor((zShift - zDirectionMin) / zDirectionDifference ) + 1;
+                    zShiftDownIndex = floor((zShift - zDirectionMin) / zDirectionDifference ) ;
+                    if(zShiftDownIndex<zDirectionNumber+1 &&zShiftDownIndex>0)
+                        sinogramFFTImagesFinal(i3 , i4 , zShiftDownIndex) = sinogramFFTImagesFinal(i3 , i4 , zShiftDownIndex) ...
+                                                                    + (zShift - zDirectionRange(zShiftDownIndex)-zDirectionDifference/2) * sinogramFFTImage(i3 , i4);
+                    end
+                    if(zShiftUpIndex<zDirectionNumber+1 && zShiftUpIndex>0)
+                        sinogramFFTImagesFinal(i3 , i4 , zShiftUpIndex) = sinogramFFTImagesFinal(i3 , i4 , zShiftUpIndex) ...
+                                                                    + (zDirectionRange(zShiftUpIndex)+zDirectionDifference/2 - zShift) * sinogramFFTImage(i3 , i4);
+                    end
+                end
             end
         end
         for i3 = 1 : size(sinogramImages , 1 )   % sweep all omega
@@ -134,21 +139,21 @@ clear i1 i2 i3 i4 sinogramImages;
 for i1 = 1 : size(sinogramFFTImagesFinal , 3)  % sweep all z
     for i3 = 1 : size(sinogramFFTImagesFinal , 1)  % sweep all omega
         for i4 = 1 : size(sinogramFFTImagesFinal , 2)  % sweep all k  
-            if(abs(kRange(i4) / omegaRange(i3))<rOmega && abs(kRange(i4))>kLim  )
+            if(abs(kRange(i4) / omegaRange(i3))<rOmega && (abs(kRange(i4))>kLim ||  abs(omegaRange(i3)) >omegaLim)  )
                 delta1 = min([(lSize/2 - zDirectionRange(i1)) / (rSize + kRange(i4)/omegaRange(i3)) , ...
                                 (lSize/2 + zDirectionRange(i1)) / (rSize - kRange(i4)/omegaRange(i3)) , ...
-                                deltaMax - deltaMin]);
+                                lSize/2/rSize]);
                 if (delta1 ==0)
-                    sinogramFFTImagesFinal(i3 , i4 ,: ) = 0;
+                    sinogramFFTImagesFinal(i3 , i4 ,i1 ) = 0;
                 else
-                    sinogramFFTImagesFinal(i3 , i4 ,: ) = sinogramFFTImagesFinal(i3 , i4 ,: ) / delta1;
+                    sinogramFFTImagesFinal(i3 , i4 ,i1 ) = sinogramFFTImagesFinal(i3 , i4 ,i1 ) / delta1;
                 end
-            elseif ( abs(kRange(i4)) <= kLim  && abs(omegaRange(i3)) <=omegaLim )
+            elseif ( abs(deltaRange(i2))<= deltaLim && abs(kRange(i4)) <= kLim  && abs(omegaRange(i3)) <=omegaLim )
                 delta2 = min([ (lSize/2 - abs(zDirectionRange(i1)))/rSize , deltaLim]);
                 if (delta2 ==0)
-                    sinogramFFTImagesFinal(i3 , i4 ,: ) = 0;
+                    sinogramFFTImagesFinal(i3 , i4 ,i1 ) = 0;
                 else
-                    sinogramFFTImagesFinal(i3 , i4 ,: ) = sinogramFFTImagesFinal(i3 , i4 ,: ) / delta2;
+                    sinogramFFTImagesFinal(i3 , i4 ,i1 ) = sinogramFFTImagesFinal(i3 , i4 ,i1 ) / delta2;
                 end
             end
             
@@ -165,5 +170,12 @@ end
  
 % Reconstruct the image
 phiRange = gpuArray(phiRange);
-sinogramImage = gpuArray(sinogramRebinImages(: , : , ceil(zDirectionNumber/2) ));  
-reconImage = iradon(sinogramImage,phiRange);
+for i =1: zDirectionNumber 
+    sinogramImage = gpuArray(abs(sinogramRebinImages(: , : , i )));  
+    reconImage(:,:,i) = iradon(sinogramImage,phiRange,'none');
+    reconImage(:,:,i) = imgaussfilt(reconImage(:,:,i),2);
+end
+
+% plot(abs(squeeze(sum(sum(reconImage,2),1))));
+% plot(abs(squeeze(sum(sum(reconImage,2),3))));
+% plot(abs(squeeze(sum(sum(reconImage,2),1))));
