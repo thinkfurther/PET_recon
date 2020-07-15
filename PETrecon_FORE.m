@@ -49,7 +49,7 @@ rMin = -80.5;
 rMax = 80.5;
 rSize = rMax - rMin;
 rNumber = 2^11;
-rNumber = 2334;
+rNumber = 1660;
 rRange = linspace(rMin , rMax ,rNumber);
 omegaRange = 2 * pi * 1 / (rRange(2) - rRange(1)) * (-rNumber/2 : rNumber/2 -1) /rNumber;
 
@@ -91,9 +91,9 @@ end
 clear idx r phi z delta rPosition phiPosition zPosition deltaPosition;
 
 % Fourier rebin
-deltaLim = 0.05;
+deltaLim = 0.01;
 kLim = 2;
-rOmega = 20;
+rOmega = 30;
 omegaLim = 2 * (omegaRange(2) - omegaRange(1));
 % sinogramFFTImages = fft2(sinogramImages);
 % sinogramFFTImages = fftshift(sinogramFFTImages , 1);
@@ -175,12 +175,41 @@ end
  
 % Reconstruct the image
 phiRange = gpuArray(phiRange);
-for i =1: zDirectionNumber 
-    sinogramImage = gpuArray(abs(sinogramRebinImages(: , : , i )));  
-    sinogramImage = iradon(sinogramImage,phiRange,'none');
-    reconImage(:,:,i) = gather(imgaussfilt(sinogramImage,2));
+for i =1: zDirectionNumber
+    sinogramImage = gpuArray(abs(sinogramRebinImages(: , : , i )));
+    sinogramImage = iradon(sinogramImage,phiRange,'Hamming',0.2,length(rRange));
+    reconImage(:,:,i) = gather(sinogramImage);
 end
 
 % plot(abs(squeeze(sum(sum(reconImage,2),1))));
 % plot(abs(squeeze(sum(sum(reconImage,2),3))));
-% plot(abs(squeeze(sum(sum(reconImage,2),1))));
+% plot(abs(squeeze(sum(sum(reconImage,3),1))));
+analyseXDirection=abs(squeeze(sum(sum(reconImage(790:870,:,25:37),3),1)));
+plot(analyseXDirection);
+[analyseXValue,analyseXIdx] = max(analyseXDirection);
+analyseXInterp=spline(1:length(analyseXDirection),analyseXDirection);
+analyseXFunc = @(x) ppval(analyseXInterp,x)- analyseXValue/2;
+analyseXLeft = fsolve(analyseXFunc,analyseXIdx*0.99);
+analyseXRight = fsolve(analyseXFunc,analyseXIdx*1.01);
+
+analyseYDirection=abs(squeeze(sum(sum(reconImage(:,790:870,25:37),3),2)));
+plot(analyseYDirection);
+[analyseYValue,analyseYIdx] = max(analyseYDirection);
+analyseYInterp=spline(1:length(analyseYDirection),analyseYDirection);
+analyseYFunc = @(x) ppval(analyseYInterp,x)- analyseYValue/2;
+analyseYLeft = fsolve(analyseYFunc,analyseYIdx*0.99);
+analyseYRight = fsolve(analyseYFunc,analyseYIdx*1.01);
+
+analyseZDirection=abs(squeeze(sum(sum(reconImage(790:870,790:870,:),1),2)));
+plot(analyseZDirection);
+[analyseZValue,analyseZIdx] = max(analyseZDirection);
+analyseZInterp=spline(1:length(analyseZDirection),analyseZDirection);
+analyseZFunc = @(x) ppval(analyseZInterp,x)- analyseZValue/2;
+analyseZLeft = fsolve(analyseZFunc,analyseZIdx*0.99);
+analyseZRight = fsolve(analyseZFunc,analyseZIdx*1.01);
+
+analyseShape(:,kkk) = [(analyseXRight - analyseXLeft)*(rRange(2)-rRange(1));
+                       (analyseYRight - analyseYLeft)*(rRange(2)-rRange(1));
+                       (analyseZRight - analyseZLeft)*(zDirectionRange(2)-zDirectionRange(1))];
+disp(['coin5.dat']);
+disp(analyseShape);
